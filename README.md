@@ -1,0 +1,2 @@
+# RancidShell
+Shell for Rancid
