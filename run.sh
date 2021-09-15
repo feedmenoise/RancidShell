@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Feedme
-# 14-05-2019
+# 27-08-2021
 
 checkSNMP () {
 #       $1 - ip
+#       $2 - community
 #echo "checkSNMP runned for $1" >> $logFile
 
-        /bin/snmpget -v1 -c $community $1 .1.3.6.1.2.1.1.1.0 | sed "s/SNMPv2-MIB::sysDescr.0 = STRING: /$var /"
+        /bin/snmpget -v1 -c $2 $1 .1.3.6.1.2.1.1.1.0 | sed "s/SNMPv2-MIB::sysDescr.0 = STRING: /$var /"
 }
 
 checkExist () {
@@ -39,10 +40,11 @@ checkVendor () {
 #       $2 - expect snmp sanswer
 #       $3 - script
 #       $4 - group name
+#       $5 - community
 
 #echo "checkVendor runned for $1 $2 $3 $4" >> $logFile
 
-snmpAnswer=$(checkSNMP $1)
+snmpAnswer=$(checkSNMP $1 $5)
 
 db_path="$path/$4/router.db"
 
@@ -70,6 +72,7 @@ db_path="$path/$4/router.db"
 
 runCheck() {
 # $1 - network
+# $2 - community
 #echo "runCheck runned for $1" >> $logFile
 
 for var in $(cat $1)
@@ -79,7 +82,7 @@ do
         for i in $(cat $script_path/dictionary)
         do
                 if [ $res != true ] && [ $i = "END" ]; then
-                        Answer=$(checkSNMP $var)
+                        Answer=$(checkSNMP $var $2)
                         echo "WARNING: $Answer not founded in dictionary" >> $logFile
                         break
                 else
@@ -88,7 +91,7 @@ do
                         group=`echo $i | /bin/cut -f 3 -d';'`
 
                         if [[ $res != true ]]; then
-                                checkVendor $var "$snmp" "$script" "$group" 
+                                checkVendor $var "$snmp" "$script" "$group" "$2"
 		        else
                                 break
                         fi
@@ -105,6 +108,7 @@ checkAlive() {
 # $1 - network
 # $2 - gateway
 # $3 - mask
+# $4 - community
 
 echo "" > $script_path/networks/$1
 /usr/sbin/fping -a -g -q -r 1 $1/$3 >> $script_path/networks/$1
@@ -116,7 +120,7 @@ do
         echo "INFO: $black removed from lists" >> $logFile
 done
 
-runCheck $script_path/networks/$1
+runCheck $script_path/networks/$1 $4
 }
 
 addNetworks() {
@@ -126,7 +130,8 @@ addNetworks() {
                 address=`echo $net | /bin/cut -f 1 -d ';'`
                 gateway=`echo $net | /bin/cut -f 2 -d ';'`
 		mask=`echo $net | /bin/cut -f 3 -d ';'`
-                checkAlive "$address" "$gateway" "$mask" &
+                community=`echo $net | /bin/cut -f 4 -d ';'`
+                checkAlive "$address" "$gateway" "$mask" "$community" &
 
         done
 }
@@ -136,9 +141,9 @@ IFS=$'\n' #fix wrong cat output
 
 date=$(date +%F_%H-%M-%S)
 logFile=/home/rancid/rancidShell.$date
-community=$1
-path=$2
+path=$1
 script_path=/etc/rancid/rancid_updater_v2
+#community=$script_path/snmpcommunity
 addNetworks
 wait
 
